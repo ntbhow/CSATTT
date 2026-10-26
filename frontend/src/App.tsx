@@ -8,9 +8,9 @@ type Stats={deckCount:number;cardCount:number;dueCount:number;reviewedToday:numb
 const API=(import.meta.env.VITE_API_URL as string|undefined)??'/api';
 
 async function request<T>(path:string,token:string|null,options:RequestInit={}):Promise<T>{
-  const headers=new Headers(options.headers); if(token)headers.set('Authorization',`Bearer ${token}`);
+  const headers=new Headers(options.headers);
   if(options.body && !(options.body instanceof FormData))headers.set('Content-Type','application/json');
-  const response=await fetch(`${API}${path}`,{...options,headers});
+  const response=await fetch(`${API}${path}`,{...options,headers,credentials:'include'});
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error??'Không thể kết nối máy chủ.');}
   if(response.status===204)return undefined as T; return response.json() as Promise<T>;
 }
@@ -23,7 +23,7 @@ function reviewChoices(repetitions:number){
 }
 
 export default function App(){
-  const [token,setToken]=useState(()=>localStorage.getItem('vocabup_token'));
+  const [token,setToken]=useState<string|null>(()=>{localStorage.removeItem('vocabup_token');return 'cookie-session';});
   const [user,setUser]=useState<User|null>(null);
   const [authMode,setAuthMode]=useState<'login'|'register'>('login');
   const [authBusy,setAuthBusy]=useState(false); const [error,setError]=useState('');
@@ -45,8 +45,8 @@ export default function App(){
   const selectedDeck=decks.find(d=>d.id===activeDeck)??null;
   const filteredCards=useMemo(()=>cards.filter(c=>`${c.front} ${c.back}`.toLowerCase().includes(search.toLowerCase())),[cards,search]);
 
-  async function submitAuth(e:FormEvent<HTMLFormElement>){e.preventDefault();setError('');setAuthBusy(true);const fd=new FormData(e.currentTarget);const payload={email:String(fd.get('email')),password:String(fd.get('password')),...(authMode==='register'?{name:String(fd.get('name'))}:{})};try{const result=await request<{token:string;user:User}>(`/auth/${authMode}`,null,{method:'POST',body:JSON.stringify(payload)});localStorage.setItem('vocabup_token',result.token);setToken(result.token);setUser(result.user);}catch(err){setError((err as Error).message);}finally{setAuthBusy(false);}}
-  function signOut(){localStorage.removeItem('vocabup_token');setToken(null);setDecks([]);setActiveDeck(null);}
+  async function submitAuth(e:FormEvent<HTMLFormElement>){e.preventDefault();setError('');setAuthBusy(true);const fd=new FormData(e.currentTarget);const payload={email:String(fd.get('email')),password:String(fd.get('password')),...(authMode==='register'?{name:String(fd.get('name'))}:{})};try{const result=await request<{user:User}>(`/auth/${authMode}`,null,{method:'POST',body:JSON.stringify(payload)});setToken('cookie-session');setUser(result.user);}catch(err){setError((err as Error).message);}finally{setAuthBusy(false);}}
+  function signOut(){if(token)void request('/auth/logout',token,{method:'POST'}).catch(()=>{});localStorage.removeItem('vocabup_token');setToken(null);setUser(null);setDecks([]);setActiveDeck(null);setCards([]);}
   async function saveDeck(e:FormEvent){e.preventDefault();if(!token)return;try{const d=await request<Deck>('/decks',token,{method:'POST',body:JSON.stringify({name:deckName,description:deckDesc,color:colors[decks.length%colors.length]})});setDecks([d,...decks]);setActiveDeck(d.id);setTab('decks');setModal(null);setDeckName('');setDeckDesc('');notify('Đã tạo bộ từ mới.');void refresh(token);}catch(e){setError((e as Error).message);}}
   async function saveCard(e:FormEvent){e.preventDefault();if(!token||!activeDeck)return;const body=JSON.stringify({front,back,example:example||null});try{if(editingCard){await request(`/cards/${editingCard.id}`,token,{method:'PATCH',body});setCards(cards.map(c=>c.id===editingCard.id?{...c,front,back,example}:c));notify('Đã cập nhật từ.');}else{const c=await request<Card>(`/decks/${activeDeck}/cards`,token,{method:'POST',body});setCards([c,...cards]);notify('Đã thêm từ mới.');}setModal(null);setEditingCard(null);setFront('');setBack('');setExample('');void refresh(token);}catch(e){setError((e as Error).message);}}
   async function deleteCard(card:Card){if(!token)return;try{await request(`/cards/${card.id}`,token,{method:'DELETE'});setCards(cards.filter(c=>c.id!==card.id));notify('Đã xóa từ.');void refresh(token);}catch(e){setError((e as Error).message);}}
