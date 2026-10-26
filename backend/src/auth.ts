@@ -13,10 +13,14 @@ export function signToken(user: AuthUser): string {
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
-  const header = req.header('authorization');
-  if (!header?.startsWith('Bearer ')) { res.status(401).json({ error: 'Vui lòng đăng nhập.' }); return; }
+  const cookieHeader = req.headers.cookie ?? '';
+  const sessionCookie = cookieHeader.split(';').map(value => value.trim()).find(value => value.startsWith('vocabup_session='));
+  if (!sessionCookie) { res.status(401).json({ error: 'Vui lòng đăng nhập.' }); return; }
+  let token = '';
+  try { token = decodeURIComponent(sessionCookie.slice('vocabup_session='.length)); }
+  catch { res.status(401).json({ error: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.' }); return; }
   try {
-    const payload = jwt.verify(header.slice(7), secret()) as jwt.JwtPayload;
+    const payload = jwt.verify(token, secret()) as jwt.JwtPayload;
     const id = Number(payload.sub);
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid subject');
     req.user = { id, email: String(payload.email), name: String(payload.name) };
