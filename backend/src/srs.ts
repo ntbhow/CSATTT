@@ -26,3 +26,4 @@ export function scheduleReview(rating: number, repetitions: number, intervalDays
 
   return { intervalDays: intervalMinutes / (24 * 60), intervalMinutes, repetitions: nextRepetitions, easeFactor: ease };
 }
+
