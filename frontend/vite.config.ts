@@ -67,7 +67,12 @@ export default defineConfig(({ mode }) => {
     },
   },
   preview: {
-    headers: { 'X-Content-Type-Options': 'nosniff' },
+    headers: {
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': "frame-ancestors 'none'",
+      'Referrer-Policy': 'no-referrer',
+    },
   },
   };
 });
