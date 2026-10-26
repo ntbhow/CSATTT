@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { parse } from 'csv-parse/sync';
 import { stringify } from 'csv-stringify/sync';
 import { z } from 'zod';
@@ -9,6 +10,11 @@ import type { AuthRequest } from './types.js';
 import { scheduleReview } from './srs.js';
 
 export const router = Router();
+const sessionCookie = (token: string) => {
+  const expiresAt = (jwt.decode(token) as jwt.JwtPayload | null)?.exp ?? Math.floor(Date.now() / 1000);
+  const maxAge = Math.max(0, expiresAt - Math.floor(Date.now() / 1000));
+  return `vocabup_session=${encodeURIComponent(token)}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
+};
 const asyncRoute = (fn: (req: AuthRequest, res: import('express').Response) => Promise<unknown>) => (req: AuthRequest, res: import('express').Response, next: import('express').NextFunction) => { void fn(req, res).catch(next); };
 const auth = authenticate;
 const userId = (req: AuthRequest) => req.user!.id;
@@ -23,7 +29,8 @@ router.post('/auth/register', asyncRoute(async (req, res) => {
   const hash = await bcrypt.hash(data.password, 12);
   const [result] = await pool.execute('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)', [data.name, data.email.toLowerCase(), hash]);
   const user = { id: Number((result as { insertId: number }).insertId), name: data.name, email: data.email.toLowerCase() };
-  res.status(201).json({ token: signToken(user), user });
+  res.setHeader('Set-Cookie', sessionCookie(signToken(user)));
+  res.status(201).json({ user });
 }));
 
 router.post('/auth/login', asyncRoute(async (req, res) => {
@@ -32,8 +39,14 @@ router.post('/auth/login', asyncRoute(async (req, res) => {
   const row = (rows as Array<{id:number;name:string;email:string;passwordHash:string}>)[0];
   if (!row || !(await bcrypt.compare(data.password, row.passwordHash))) { res.status(401).json({ error: 'Email hoặc mật khẩu không đúng.' }); return; }
   const user = { id: row.id, name: row.name, email: row.email };
-  res.json({ token: signToken(user), user });
+  res.setHeader('Set-Cookie', sessionCookie(signToken(user)));
+  res.json({ user });
 }));
+
+router.post('/auth/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', `vocabup_session=; Path=/api; HttpOnly; SameSite=Strict; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+  res.status(204).end();
+});
 
 router.get('/me', auth, asyncRoute(async (req, res) => {
   const [rows] = await pool.execute('SELECT id, name, email, created_at AS createdAt FROM users WHERE id = ?', [userId(req)]);
