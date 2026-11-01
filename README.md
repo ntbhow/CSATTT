@@ -16,4 +16,3 @@ Build production bằng `npm run build`, sau đó chạy backend với `NODE_ENV
 Trong trang Bộ từ, dùng biểu tượng tải lên trên thẻ bộ từ hoặc nút Nhập CSV trong chi tiết bộ để chọn `.csv` hoặc `.apkg`. APKG được nhập vào bộ VocabUp đã chọn; mỗi ghi chú Anki thành một từ, thẻ đảo chiều không bị nhân đôi. Phiên âm, định nghĩa, nghĩa tiếng Việt và ví dụ được chuyển thành văn bản. Audio/hình ảnh chưa được lưu vào VocabUp. Đọc APKG v3 cần Node.js 24 trở lên; file giới hạn 50 MB và tối đa 5.000 ghi chú.
 
 Các lệnh khác: `npm run build`, `npm test`.
-
